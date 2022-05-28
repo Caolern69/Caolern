@@ -1,0 +1,1097 @@
+Source Code
+Main
+1 import discord
+2 import bs4  # Beautiful Soup Library for Web Scraping Spells items Ect
+3 import google
+4 from googlesearch import search
+5 from discord.ext import commands
+6 import os
+7 import random
+8 from encrypty import AESCipher
+9 from Tables import db 
+10from Tables import User, Character, CTU, Utid, Dungeonmaster, UTS, Monster, PrimaryCharacter
+11
+12
+13db.create_all()
+14db.session.commit()
+15
+16
+17client = commands.Bot(
+18    command_prefix="."
+19)  # Sets the bot to recognise all messages beginning with . as a potential command.
+20
+21@client.command
+22async def load(
+23    ctx, extension
+24): 
+25    client.load_extension(f"cogs.{extension}")
+26
+27
+28@client.command()
+29async def unload(ctx, extension):
+30    client.unload_extension(f"cogs.{extension}")
+31
+32
+33for filename in os.listdir("./cogs"):
+34    if filename.endswith(".py"):
+35        client.load_extension(f'cogs.{filename[:-3]}')
+36
+37
+38client.run(os.getenv("token"))  #starts the aplication
+39#By Default Replit is public, this is an issue as anyone who knows the token of the bot can edit,so for security reasons i stored it as an enviroment variable #function decorater denotes that the function is going to represent an event
+40
+
+
+
+General.py
+1  import traceback
+2  import sys
+3  import discord
+4  import json
+5  import requests
+6  from discord.ext import commands
+7  import bs4  # Beautiful Soup Library for Web Scraping Spells items Ect
+8  import google
+9  from googlesearch import search
+10 import os
+11 import random
+12 from encrypty import AESCipher
+13 from Tables import db
+14 from Tables import User, Character, CTU, Utid, Dungeonmaster, UTS, Monster, PrimaryCharacter
+15 
+16 
+17 class StartUp(commands.Cog): #startup Class, which is used to test functionality of the bot.
+18     def __init__(self, client):
+19         self.client = client
+20 
+21     #Events
+22     @commands.Cog.listener()#decorater to let the discord API know that this is an event driven response, i.e start of the bot.
+23     async def on_ready(self): #When the bot is ready sends a message to the terminal,(when the discord API returns a value of true.__name__)
+24         print("Bot is online")
+25 
+26     @commands.command() #decorator to let the discord API know this is one of the Bot's commands.
+27     async def ping(self, ctx):
+28         await ctx.send('Pong! {0}'.format(round(self.client.latency, 1)))
+29 
+30 
+31 class RollDice(commands.Cog):
+32     def __init__(self, client):
+33         self.client = client
+34         self._dicein = ""
+35 
+36     def _GetDiceInput(
+37         self, _dicein
+38     ):  #Part of the overall RollDice feature, used to seperate the inputs.
+39         newdicein = _dicein
+40         try: 
+41           newdicein = _dicein.replace("D","d")
+42         except IndexError:
+43           pass
+44         dicesplit = newdicein.split("d", 1)
+45         diceamount = dicesplit[::2]
+46         dicetype = dicesplit[1]
+47         diceamountstr = "".join(map(str, diceamount))
+48         try:
+49           mods = dicetype.split("+",1)
+50           modifier = mods[1]
+51           dicetype = mods[::2]
+52           dicetypestr = "".join(map(str,dicetype))
+53           diceamountstr = "".join(map(str, diceamount))
+54           intdiceamount = int(diceamountstr)
+55           intdicetype = int(dicetypestr)
+56           intmodifier = int(modifier)
+57         except IndexError: #error handling if a + is not used in an input
+58           intmodifier = 0
+59           intdicetype = int(dicetype)
+60           pass
+61       
+62     
+63         except ValueError: #error handling if an invalid input is given
+64           intmodifier = 0
+65           pass
+66         diceamountstr = "".join(map(str, diceamount))
+67         intdiceamount = int(diceamountstr)
+68         return intdiceamount, intdicetype,intmodifier
+69         
+70 
+71     def _rolldice(
+72         self, _dicein
+73     ):  #Part of the RollDice feature used to calculate values for the dice rolled.
+74         diceinput = self._GetDiceInput(_dicein)
+75         diceamount = diceinput[0]
+76         dicetype = diceinput[1]
+77         dicemod = diceinput[2]
+78         diceroll = []
+79         roll = 0
+80         for n in range(0, int(diceamount)):
+81             roll = random.randint(1, int(dicetype))
+82             diceroll.append(roll)
+83         dicesum = sum(diceroll) + dicemod
+84         return diceroll, dicesum
+85 
+86     @commands.Cog.listener()
+87     async def on_message(self, message):  #Beginning of rolldice function
+88         if message.author == self.client.user:
+89             return
+90         if message.content.startswith("!"):
+91             messagecont = str(message.content)
+92             try:
+93                 messagecontnew = messagecont.replace("!", "")
+94                 diceroll1 = self._rolldice(messagecontnew)
+95                 dicerolled = diceroll1[0]
+96                 totaldiceroll = diceroll1[1]
+97                 messagetosend = f"{messagecontnew}\n***You Rolled***: {dicerolled} \n***Total Diceroll***, {totaldiceroll}"
+98                 if len(
+99                         messagetosend
+100                ) > 1999:  #Discord limits all messages to 2000 characters and will produce an error if a larger one is sent by a bot, if a rolldice output is over 1999 characters it is sent as a text file(which discord allows)
+101                    f = open("diceroll.txt", "w")
+102                    f.write(messagetosend)
+103                    f.close()
+104                    await message.channel.send(
+105                        file=discord.File(r'diceroll.txt'))
+106                else:
+107                    str(messagetosend)
+108                    await message.channel.send(messagetosend)
+109            except ValueError:
+110                await message.channel.send(
+111                    f"Invalid Dice Roll"
+112                )  #If there is an error in doing a calculation this message is sent
+113
+114        #await self.client.process_commands(message)
+115
+116
+117class Account(commands.Cog):
+118    def __init__(self, client):
+119        self.client = client
+120        self._protect = AESCipher("abdjddh")
+121
+122    def CheckIfLoggedIn(
+123        self, Discord
+124    ):  # Function to check if a user exists in the Utid table(therefore they are logged in) used in most discord functions before any operations as to not waste processing power, if a user does not have an account.
+125        accountexists = bool(Utid.query.filter_by(Discord=Discord).first())
+126        if accountexists == True:
+127            loggedin = True
+128            messagetosend = ""
+129        else:
+130            loggedin = False
+131            messagetosend = f"You don't have an Account or are not logged in ! Please create one with .Create_Account or login with .login !"
+132        return (loggedin, messagetosend)
+133
+134    @commands.command(aliases=["Login", "log-in", "signin"])
+135    async def login(self, ctx):
+136        await ctx.channel.send(f"Please enter your Username")
+137
+138        def check(msg):
+139            return msg.author.id == ctx.author.id
+140
+141        msg = await self.client.wait_for('message', check=check)
+142        username = msg.content
+143        #Makes sure the user isn't already logged in
+144        DiscordID = msg.author.id
+145        Loggedin = bool(
+146            Utid.query.filter_by(Username=username, Discord=DiscordID).first())
+147        print(Loggedin)
+148        if Loggedin == False:
+149            usernameexists = User.query.filter_by(username=username).first(
+150            )  #once the user is validated then a search of User is done.
+151            usernameexistsbool = bool(usernameexists)
+152            if usernameexistsbool == True:
+153                await ctx.channel.send(f"Please enter your password : ")
+154                msg = await self.client.wait_for('message', check=check)
+155                suspassword = msg.content
+156                await msg.delete()
+157                await self.client.process_commands(msg)
+158                PasswordCorrect = self._checkpassword(username,suspassword) #checks the login attempt's password vs stored password value
+159                if PasswordCorrect == True:
+160                    await ctx.channel.send("You have logged into your account!"
+161                                           )
+162                    DiscordID = msg.author.id
+163                    login = Utid(Username=username, Discord=DiscordID)
+164                    db.session.add(login)
+165                    db.session.commit()
+166                else:
+167                    await ctx.channel.send(f"Invalid Password")
+168            else:
+169                await ctx.channel.send(f"Invalid Username")
+170        if Loggedin == True:
+171            await ctx.channel.send(f"You are already logged in!")
+172
+173    @commands.command(aliases=["CreateAccount", "createaccount"])
+174    async def Create_Account(self, ctx):
+175        await ctx.channel.send("Do you want to make an account? Y or N")
+176
+177        def check(msg):
+178            return msg.author == ctx.author and msg.channel == ctx.channel and \
+179             msg.content.lower() in ["y", "n"] #Makes the input lowercase to make it easier to accept a wide variety of inputs rather than writing each exception manually
+180        msg = await self.client.wait_for("message", check=check)
+181        if msg.content.lower() == "y":
+182              print("test12")
+183              await ctx.send("You Have Chosen to Create an account")
+184        Discord = msg.author.id
+185        ServerID = msg.guild.id
+186        print(Discord, ServerID)
+187        query = bool(User.query.filter_by(discordacc=Discord).first())
+188        print(query)
+189        if query == False:
+190          await ctx.send("Please Enter a Unique UserName")
+191
+192          def check(msg):
+193            return msg.author == ctx.author and msg.channel == ctx.channel
+194
+195          msg = await self.client.wait_for("message", check=check)
+196          username = msg.content
+197          exists = bool(User.query.filter_by(username=username).first())
+198          if exists == True:
+199            await ctx.send("Account already exists please try again.")
+200          else:
+201              accountexists = bool(
+202                    Utid.query.filter_by(Discord=Discord).first())
+203              if accountexists == True:
+204                await ctx.send(
+205                        "You already have an account asscociated with your Discord, please try log into that account with .login."
+206                    )
+207              if accountexists == False:
+208                Values = []
+209                Values.append(msg.content)
+210                await ctx.send(
+211                        "Please enter a strong password, greater than 8 characters! "
+212                    )
+213
+214                def check(msg):
+215                    return msg.author == ctx.author and msg.channel == ctx.channel
+216
+217                msg = await self.client.wait_for("message", check=check)
+218                content = msg.content
+219                await msg.delete()
+220                await self.client.process_commands(msg)
+221                password =  await self._checkpasswordlength(ctx,content)
+222                print("password is " , password)
+223                await ctx.channel.send(
+224                        "You have successfully created an account,login with .login to access features")
+225                AESContent = self._protect.encrypt(password)
+226                print(AESContent)
+227                Values.append(AESContent)
+228                print(Values, "Values")
+229                accdiscord = msg.author.id
+230                usertoadd = User(username=Values[0], password=Values[1],discordacc=accdiscord)
+231                print(usertoadd)
+232                db.session.add(usertoadd)
+233                db.session.commit()
+234
+235          if msg.content.lower() == "n":
+236              await ctx.channel.send("You have chosen not to create an account")
+237        else:
+238          await ctx.channel.send("You already have an account!")
+239
+240    async def _checkpasswordlength(
+241        self, ctx, content
+242    ):  #_ To denote private function so it is not shown under the .help commmand which is default and has to be async to work with discord, meaning it must be awaited when called.
+243        content = content
+244        if len(content) < 8:
+245
+246            def check(msg):
+247                return msg.author.id == ctx.author.id
+248
+249            await ctx.channel.send(
+250                "Please ensure your Password is greater than 8 characters! Enter again: "
+251            )
+252            msg = await self.client.wait_for("message", check=check)
+253            content = msg.content
+254            print("content is :",  content)
+255            await msg.delete()
+256            await self.client.process_commands(msg)
+257            await self._checkpasswordlength(
+258                ctx, content
+259            )  #Calls itself recursively until it reaches a password length greater than 8 characters
+260        else: 
+261          print(content , "content")
+262        return content
+263
+264    @commands.command(aliases=["AssignDM,Dm,AssignDm"])
+265    async def assigndm(self, ctx):
+266        Discord = ctx.author.id
+267        server = ctx.guild.id
+268        Loggedin, messagetosend = self.CheckIfLoggedIn(Discord)
+269        if Loggedin == True:
+270            exists = bool(UTS.query.filter_by(ServerDiscord=server).first())
+271            print("works?")
+272            if exists == False:
+273                DmToBeAdded = UTS(UserDiscord=Discord, ServerDiscord=server)
+274                db.session.add(DmToBeAdded)
+275                dmtobeaddedtodm = Dungeonmaster(discord=Discord)
+276                db.session.add(dmtobeaddedtodm)
+277                db.session.commit()
+278                await ctx.channel.send("You are now a the dungeonmaster!")
+279            else:
+280                await ctx.channel.send(
+281                    "There is already a DM Assigned to this server!")
+282        if Loggedin == False:
+283            await ctx.channel.send(messagetosend)
+284
+285    async def CheckIfDM(self, ctx, Discord, server):
+286        exists = bool(
+287            UTS.query.filter_by(ServerDiscord=server,
+288                                UserDiscord=Discord).first())
+289        print("check")
+290        if exists == True:
+291            await ctx.channel.send("You are the Dungeonmaster!")
+292        else:
+293            await ctx.channel.send("You are a mere mortal player")
+294    def _checkpassword(self,username,suspassword):
+295      user = User.query.filter_by(username=username).first()
+296      encryptaccpassword = user.password
+297      accpassword = self._protect.decrypt(encryptaccpassword)
+298      if accpassword == suspassword:
+299        PasswordCorrect = True
+300      else:
+301        PasswordCorrect = False
+302      return(PasswordCorrect)
+303   
+304    @commands.command()
+305    async def Logoff(self,ctx):
+306      print("teste12e") #debug print , when testing
+307      Discord = ctx.author.id
+308      Loggedin, messagetosend = self.CheckIfLoggedIn(Discord)
+309      if Loggedin == True:
+310        await ctx.channel.send(f"Are you sure you wish to log out of your account? ")
+311        def check(msg):
+312          return msg.author.id == ctx.author.id
+313        msg = await self.client.wait_for('message',check=check)
+314        Discord = msg.author.id
+315        if msg.content.lower() == "yes" or msg.content.lower() == "y":
+316          query = Utid.query.filter_by(Discord=Discord).first()
+317          db.session.delete(query)
+318          db.session.commit()
+319          await ctx.channel.send(f"You have logged out of your account!")
+320        else:
+321          await ctx.channel.send(f"You have chosen not to log of" )
+322      else:
+323        await ctx.channel.send(messagetosend)
+324      
+325
+326
+327class menus(commands.Cog):
+328    def __init__(self, client):
+329        self.client = client
+330        self.useraccount = Account(client) #composition of the other classes Accout Player and DM is needed in order to process and request input data.
+331        self.player = Player(client)
+332        self.dm = DM(client)
+333
+334    async def _display(self, ctx, type):
+335        if type == "menu":
+336            await ctx.channel.send(
+337                f' ***Account Menu*** \nWelcome to your account menu please select one of the following options, by typing in the number which you want to choose: \n 1.View Characters \n 2.Check Account Status \n 3.Set Primary Character\nIf you wish to quit enter x'
+338            )
+339        if type == "dmmenu":
+340            await ctx.channel.send(
+341                f"***Dungeon Master's menu***\nPlease enter the number of which option you wish to use: \n1.Create Monster\n2.Destroy Monster\n3.Display Monster\nIf you wish to quit enter x"
+342            )
+343        options = ["1", "2", "3", "x"]
+344
+345        def check(msg):
+346            return msg.author.id == ctx.author.id
+347
+348        msg = await self.client.wait_for('message', check=check)
+349        choice = msg.content
+350        print(choice)
+351        if choice not in options:
+352            await ctx.channel.send(
+353                f"Invalid input please specify number 1-3, if you wish to quit enter x"
+354            )
+355            choice = await self._display(ctx, type)
+356
+357        return choice
+358
+359    @commands.command(
+360        aliases=["menu", "Menu", "Display Menu", "Displaymenu", "displaymenu"])
+361    async def playermenu(self, ctx):
+362        Discord = ctx.author.id
+363        loggedin, messagetosend = self.useraccount.CheckIfLoggedIn(Discord)
+364        if loggedin == False:
+365            await ctx.channel.send(messagetosend)
+366        if loggedin == True:
+367            type = "menu"
+368            choice = await self._display(ctx, type)
+369            while choice != "x":
+370                if choice == "1":
+371                    await self.player.GetCharList(ctx, Discord)
+372                    print("test")
+373                    choice = await self._display(ctx, type)
+374                if choice == "2":
+375                    server = ctx.guild.id
+376                    await self.useraccount.CheckIfDM(ctx, Discord, server)
+377                    choice = await self._display(ctx, type)
+378                if choice == "3":
+379                    await self.player.ChangePrimaryCharacter(ctx, Discord)
+380                    choice = await self._display(ctx, type)
+381
+382    @commands.command(
+383        aliases=["dmmenu", "dungeonmastermenu", "DmMenu", "Dmmenu"])
+384    async def DMmenu(self, ctx):
+385        print("test")
+386        Discord = ctx.author.id #Gets the discord id of the user who sent the initial command, ctx refers to the context with which  the original command is entered in discord.
+387        server = ctx.guild.id
+388        exists = bool(
+389            UTS.query.filter_by(ServerDiscord=server,
+390                                UserDiscord=Discord).first())
+391        print(exists)
+392        if exists == False:
+393            await ctx.channel.send(
+394                "You don't have permission to use this command")
+395        else:
+396            DmID = Dungeonmaster.query.filter_by(discord=Discord).first()
+397            dungeonmasterid = DmID.id
+398            type = "dmmenu"
+399            choice = await self._display(ctx, type)
+400            while choice != "x":
+401              if choice == "1":
+402                  await self.dm.CreateMonster(ctx)
+403                  choice = await self._display(ctx, type)
+404              if choice == "2":
+405                  await self.dm.DeleteMonster(ctx, dungeonmasterid)
+406                  choice = await self._display(ctx, type)
+407              if choice == "3":
+408                  await self.dm.GetMonList(ctx, dungeonmasterid)
+409                  choice = await self._display(ctx, type)
+410
+411
+412class Player(commands.Cog):
+413    def __init__(self, client):
+414        self.client = client
+415
+416    @staticmethod
+417    def GetCorrectInput(
+418        message
+419    ):  #Function to remove and format lists with [] used in display characters and display monsters
+420        lst = []
+421        for pos, har in enumerate(message):
+422            lst.append(pos)
+423            if pos == 0 or pos == (len(message) - 1):
+424                CorrectInput = True
+425                if CorrectInput == True:
+426                    corrects = message.replace("[", "")
+427                    correctss = corrects.replace("]", "")
+428                    return (correctss)
+429            else:
+430                pass
+431
+432    @staticmethod
+433    def GetCharacterinfo(
+434        string
+435    ):  # Function to Seperate aspects within a list from the database query, pertaining to a user character, it is a seperate function incase I wish to add more fields to the character table than the monster's table in future iterations
+436        strings = string.replace("[", "")
+437        stringwithoutchar = strings.replace("Character", "")
+438        stringsplit = stringwithoutchar.split(",")
+439        newstring = []
+440        for n in stringsplit:
+441            newn = n.replace("'", "")
+442            newstring.append(newn)
+443        CharIDwithbracket = newstring[0]
+444        CharID = CharIDwithbracket.replace("(", "")
+445        CharName = newstring[1]
+446        CharClass = newstring[2]
+447        CharAC = newstring[3]
+448        CharMaxHP = newstring[4]
+449        CharDesc = newstring[5]
+450        CharLinkedDiscordWithbrackets = newstring[6]
+451        CharLinkedDiscordWithbracket = CharLinkedDiscordWithbrackets.replace(
+452            ")", "")
+453        CharLinkedDiscord = CharLinkedDiscordWithbracket.replace("]", "")
+454        return CharID, CharName, CharClass, CharAC, CharMaxHP, CharDesc, CharLinkedDiscord
+455
+456    @commands.command(
+457        aliases=["Create Character", "createcharacter", "Createcharacter"])
+458  #method to Create a Character, for a user who is logged in
+459    async def CreateCharacter(self, ctx):
+460        await ctx.channel.send("Do you want to create a Character, Yes/No")
+461        Discord = ctx.author.id
+462
+463        def check(msg):
+464            return msg.content.lower() == "yes" and msg.author.id == Discord
+465
+466        msg = await self.client.wait_for('message', check=check)
+467        accountexists = bool(Utid.query.filter_by(Discord=Discord).first()) #User must have an account before creating a character, as such it the query checks if an account linked to their discord ID exists.
+468        if accountexists == True:
+469            await ctx.channel.send(
+470                'You have chosen To Make a New Character please enter the following information in the format \n [Name,Class,AC,HP,Description]'
+471            )
+472
+473            def check(msg):
+474                return msg.author.id == Discord
+475
+476            msg = await self.client.wait_for('message', check=check)
+477            DataToAdd = msg.content
+478            Data = self.GetCorrectInput(DataToAdd)
+479            numofcommas = Data.count(",")
+480            if numofcommas != 4: #input must consist of 4 commans, if not an error message is sent, dont want incomplete characters in the database.
+481                await ctx.channel.send(f"Incorrect input, please try again!")
+482            else:
+483                CharacterData = Data.split(",", 4)
+484                print(CharacterData)
+485                Name = CharacterData[0]
+486                DnDClass = CharacterData[1]
+487                MaxHP = CharacterData[3]
+488                AC = CharacterData[2]
+489                Description = CharacterData[4]
+490                NewCharacter = Character(Name=Name,
+491                                         DnDClass=DnDClass,
+492                                         AC=AC,
+493                                         MaxHP=MaxHP,
+494                                         ownerdiscord=Discord,
+495                                         Description=Description)
+496                if not Name or not DnDClass or not AC or not Description or not MaxHP:
+497                    await ctx.channel.send(
+498                        "Invalid input, please ensure you fill all fields.")
+499                else:
+500                    db.session.add(NewCharacter)
+501                    db.session.commit()
+502                    print("Character Created")
+503                    accountcreated = f'Character {Name} has been created and linked to your account.\n To view your characters use the .menu command and choose option 1'
+504                    await ctx.channel.send(accountcreated)
+505        else:
+506            await ctx.channel.send(
+507                "You don't have an account or havent logged in , please create an account with .Create_Account or login with .login "
+508            )
+509
+510    @staticmethod
+511    def GetPrimeCharQuery(discord):
+516        Characterquery = db.session.query(PrimaryCharacter,Character).filter(PrimaryCharacter.Discord==discord,PrimaryCharacter.Characters==Character.id).first()
+517        print("Test",Characternewquery.id)
+518        return Characterquery
+519
+520  
+521
+522    @commands.command(aliases=["hP", "Hp"])
+523    async def hp(self, ctx):
+524        discord = ctx.author.id
+525        print("hp test")
+526        Characterquery = self.GetPrimeCharQuery(discord)
+527        await ctx.channel.send(
+528            f"{Characterquery.Name}, is on {Characterquery.MaxHP} ,HP")  
+529
+530    @commands.command(aliases=["changeHP"])
+531    async def changehp(self, ctx):
+532        discord = ctx.author.id
+533        Characterquery = self.GetPrimeCharQuery(discord)
+534        await ctx.channel.send(
+535            f"{Characterquery.Name}, is on {Characterquery.MaxHP} HP do you wish to update it?"
+536        )
+537
+538        def check(msg):
+539            return msg.author.id == discord
+540
+541        msg = await self.client.wait_for('message', check=check)
+542        if msg.content.lower() == 'yes':
+543            await ctx.channel.send(f"Enter the new value for HP: ")
+544
+545            def check(msg):
+546                return msg.author.id == discord
+547
+548            msg = await self.client.wait_for('message', check=check)
+549            Characterquery.MaxHP = msg.content
+550            db.session.commit()
+551
+552            await ctx.channel.send("You have updated your character.")
+553        else:
+554            await ctx.channel.send("You have not updated your character.")
+555    #Command to get User's primary characters, armour class or AC
+556    @commands.command(aliases=["Ac", "AC"])
+557    async def ac(self, ctx):
+558        discord = ctx.author.id
+559        Characterquery = self.GetPrimeCharQuery(discord)
+560        await ctx.channel.send(
+561            f"{Characterquery.Name}'s armour class is {Characterquery.AC}")
+562#Command to change User's primary characters, armour class or AC
+563    @commands.command(aliases=["ChangeAC", "changeAc", "ChangeAc", "changeac"])
+564    async def changeAC(self, ctx):
+565        discord = ctx.author.id
+566        Characterquery = self.GetPrimeCharQuery(discord)
+567        await ctx.channel.send(
+568            f"{Characterquery.Name}, is on {Characterquery.AC} AC do you wish to update it?"
+569        )
+570
+571        def check(msg):
+572            return msg.author.id == discord
+573
+574        msg = await self.client.wait_for('message', check=check)
+575        if msg.content.lower() == 'yes':
+576            await ctx.channel.send(f"Enter the new value for AC: ")
+577
+578            def check(msg):
+579                return msg.author.id == discord
+580
+581            msg = await self.client.wait_for('message', check=check)
+582            Characterquery.AC = msg.content
+583            db.session.commit()
+584            await ctx.channel.send("You have updated your character.")
+585        else:
+586            await ctx.channel.send("You have not updated your character.")
+587   #Method to get all characters, associated with a user's id for the display characters menu function
+588    async def GetCharList(self, ctx, discordid):
+589        query = list(Character.query.filter_by(ownerdiscord=discordid).all())
+590        print(query)
+591        numofchars = len(query)
+592
+593        if not query:
+594            await ctx.channel.send("You dont have any Characters!")
+595        else:
+596            message = f"***Characters***\nYou have a total of {numofchars} Characters"
+597            await ctx.channel.send(message)
+598            for n in query:
+599                print(n)
+600                stringn = str(n)
+601                CharID, CharName, CharClass, CharAC, CharMaxHP, CharDesc, CharLinkedDiscord = self.GetCharacterinfo(
+602                    stringn)
+603                print(self.GetCharacterinfo(stringn))
+604                characters = f'Name: {CharName}\n Class: {CharClass}\n AC:{CharAC}\n MaxHP: {CharMaxHP}\n Description: {CharDesc}'
+605                print(characters)
+606                await ctx.channel.send(characters)
+607    #method to check if a user has multiple characters with the same name when assigning a primary character, if so the user is prompted to enter the ID of the character they wish to make their primary Character.
+608    async def _CheckIfMultiple(self, ctx, Name, Discord):
+609        query = list(
+610            Character.query.filter_by(ownerdiscord=Discord, Name=Name).all())
+611        querystr = ''.join(map(str, query))
+612        print(querystr)
+613        multiple = querystr.count(Name)
+614        print("multiple is :", multiple)
+615        idlist = []
+616        if multiple > 1:
+617            for n in query:
+618                print(n)
+619                stringn = str(n)
+620                CharID, CharName, CharClass, CharAC, CharMaxHP, CharDesc, CharLinkedDiscord = self.GetCharacterinfo(
+621                    stringn)
+622                print(self.GetCharacterinfo(stringn))
+623                print(CharID)
+624                idlist.append(CharID)
+625                message = f' ID:{CharID},Name: {CharName}\n Class: {CharClass}\n AC:{CharAC}\n MaxHP: {CharMaxHP}\n Description: {CharDesc}'
+626                await ctx.channel.send(message)
+627
+628            await ctx.channel.send(
+629                f"You have multiple Characters by the name {Name}, please specify the CharacterID of the one you wish to make your primary character!"
+630            )
+631
+632            def check(msg):
+633                return msg.author == ctx.author and msg.channel == ctx.channel
+634
+635            msg = await self.client.wait_for('message', check=check)
+636            userCharacterID = msg.content
+637            print("UserCharacterID is , ", userCharacterID)
+638            if userCharacterID in idlist:
+639                return userCharacterID
+640                print("UserCharacterID is : ", userCharacterID)
+641            else:
+642                await ctx.channel.send(
+643                    "Unrecognised CharacterID please try again")
+644                await self._CheckIfMultiple(ctx, Name, Discord)
+645        if multiple == 1:
+646            for n in query:
+647                print(n)
+648                stringn = str(n)
+649                CharID, CharName, CharClass, CharAC, CharMaxHP, CharDesc, CharLinkedDiscord = self.GetCharacterinfo(
+650                    stringn)
+651                print(self.GetCharacterinfo(stringn))
+652                print(CharID)
+653                print("trtrhtui")
+654
+655                userCharacterID = CharID
+656                print("UserCharacterID is : ", userCharacterID)
+657                return userCharacterID
+658            if multiple == 0:
+659                CharName = ""
+660                userCharacterID = ""  #returns empty string as a user's character's id and name cannot be blank, so it wont cause an unwanted output
+661                return userCharacterID
+662
+663    async def _CheckCurrentPrimaryCharacter(self, ctx, discord):
+664        query = PrimaryCharacter.query.filter_by(Discord=discord).first()
+665        print("query is !", query)
+666        if not query:
+667            nocharacter = True
+668        if query:
+669            nocharacter = False
+670        return nocharacter, query
+671    #Changes the user's primary character, to be used in playermenu option 3
+672    async def ChangePrimaryCharacter(self, ctx, discord):
+673        await ctx.channel.send(
+674            f"Enter the name of the character you wish to make your primary character"
+675        )
+676
+677        def check(msg):
+678            return msg.author.id == ctx.author.id
+679
+680        msg = await self.client.wait_for('message', check=check)
+681        name = msg.content
+682        discord = msg.author.id
+683        userCharacterID = await self._CheckIfMultiple(ctx, name, discord)
+684        print("userid is ", userCharacterID)
+685        if not userCharacterID:
+686            await ctx.channel.send(
+687                f"You have no characters by that name, please check and try again"
+688            )
+689        else:
+690            nocharacter, query = await self._CheckCurrentPrimaryCharacter(
+691                ctx, discord)
+692            print(nocharacter)
+693            print(nocharacter)
+694
+695            if nocharacter == True:
+696                newprimechar = PrimaryCharacter(Characters=userCharacterID,
+697                                                Discord=discord)
+698                db.session.add(newprimechar)
+699                db.session.commit()
+700                await ctx.channel.send(
+701                    f"{name} is now your primary character, to find out what this means use .helpme! "
+702                )
+703            if nocharacter == False:
+704                character = str(query.Characters)
+705                if character == str(userCharacterID):
+706                    await ctx.channel.send(
+707                        f"{name} is already your primary character!")
+708                else:
+709                    query.Characters = userCharacterID  #uses previous query to update database, saves wasting processing power on a new query.
+710                    db.session.commit()
+711                    await ctx.channel.send(
+712                        f"Primary Character updated!\n{name} is now your primary character!"
+713                    )
+714
+715
+716class DM(commands.Cog):
+717    def __init__(self, client):
+718        self.client = client
+719        self.player = Player(client)
+720    
+721    async def CreateMonster(self, ctx):
+722        await ctx.channel.send(
+723            f"Please enter the information about your monster in the following format: Name,MaxHP,HP,AC,Description"
+724        )
+725        Discord = ctx.author.id
+726        DmID = Dungeonmaster.query.filter_by(discord=Discord).first()
+727        dungeonmasterid = DmID.id
+728
+729        def check(msg):
+730            return msg.author.id == Discord
+731
+732        msg = await self.client.wait_for('message', check=check)
+733        DataToAdd = msg.content
+734        print(DataToAdd)
+735        Data = self.player.GetCorrectInput(DataToAdd)
+736        print(Data)
+737        commammount = Data.count(",")
+738        print(commammount)
+739        #Checks the number of commas to determine if the right amount of fields have been filled
+740        if commammount != 4:
+741            await ctx.channel.send("Incorrect input, please try again!")
+742        print(Data)
+743        MonsterData = Data.split(",", 4)
+744        print(MonsterData)
+745        Name = MonsterData[0]
+746        MaxHP = MonsterData[1]
+747        HP = MonsterData[3]
+748        AC = MonsterData[2]
+749        Description = MonsterData[4]
+750
+751        if not Name or not MaxHP or not HP or not AC or not Description:
+752            #original idea of how to handle incorrect input , repurposed to handle blank fields
+753            await ctx.channel.send(
+754                f"Invalid input, please ensure all fields are filled!")
+755        else:
+756            print("dungeonmasterid is ", dungeonmasterid)
+757            monstertoadd = Monster(Name=Name,
+758                                   MaxHP=MaxHP,
+759                                   HP=HP,
+760                                   AC=AC,
+761                                   description=Description,
+762                                   dm=dungeonmasterid)
+763            print(monstertoadd)
+764            db.session.add(monstertoadd)
+765            db.session.commit()
+766            message = f"You have successfully created {Name} "
+767            await ctx.channel.send(message)
+768
+769    async def GetMonList(self, ctx, dungeonmasterid):
+770        query = list(Monster.query.filter_by(dm=dungeonmasterid).all())
+771        print(query)
+772        for n in query:
+773            print(n)
+774            stringn = str(n)
+775            MonID, MonName, MonHP, MonMaxHP, MonAC, MonDesc, DM = self.player.GetCharacterinfo(
+776                stringn)
+777            monsters = f'MonsterID:{MonID} \n Name: {MonName} , \n HP: {MonHP} , \n AC:{MonAC} , \n MaxHP: {MonMaxHP} \n Description: {MonDesc}'
+778            await ctx.channel.send(monsters)
+779        if not query:  #due to the boolean nature of a list in python the not logicc function can be used to test if a list is empty
+780            await ctx.channel.send(
+781                f"You do not have any monsters, please create some with .dmmenu option 1!"
+782            )
+783
+784    async def DeleteMonster(self, ctx, dungeonmasterid):
+785        message = f"Enter the ID of the monster you wish to destroy, this can be found with the view monsters menu option: "
+786        await ctx.channel.send(message)
+787        Discord = ctx.author.id
+788
+789        def check(msg):
+790            return msg.author.id == Discord
+791
+792        msg = await self.client.wait_for('message', check=check)
+793        exists = bool(
+794            Monster.query.filter_by(id=(msg.content),
+795                                    dm=dungeonmasterid).first())
+796        if exists == True:
+797            monstertobedeleted = Monster.query.filter_by(
+798                id=(msg.content), dm=dungeonmasterid).first()
+799            message = f"Are you sure you want to delete {monstertobedeleted.Name}"
+800            await ctx.channel.send(message)
+801
+802            def check(msg):
+803                return msg.author.id == Discord
+804
+805            msg = await self.client.wait_for('message', check=check)
+806            messagefull = msg.content
+807            if messagefull.lower() == "yes" or messagefull.lower() == "y":
+808                print("debug")
+809                db.session.delete(monstertobedeleted)
+810                db.session.commit()
+811                deletemessage = f"You have successfully deleted {monstertobedeleted.Name}"
+812                await ctx.channel.send(deletemessage)
+813            else:
+814                message = f"You have chosen not to delete {monstertobedeleted.Name}"
+815                await ctx.channel.send(message)
+816        if exists == False:
+817            message = f"Invalid Monster ID entered, monster ID should be purely numerical,monsterID can be found with dmmenu option 3."
+818            await ctx.channel.send(message)
+819
+820
+821class General(commands.Cog):
+822    def __init__(self, client):
+823        self.client = client
+824
+825    @commands.command(aliases=["helpme", "plzhelp"])
+826    async def halp(self, ctx):
+827
+828        halp = f"\t              ***Help Menu***             \n .***Create_Account(.CreateAccount)*** Used to Create an account which is required to create characters\n***.login*** In order to use your account you must login,with .login you can create a character via ***.CreateCharacter*** , and use the ***.menu feature***\n***.assignDM*** Allows you to assign a DM to the server, who can in turn access the DM menu to create monsters.\n***.dmmenu*** Displays all the DM options, note there can only be one DM per server.\n***.lookup (whatever you want to look up ) will send links of DnD related articles related to your query.\n ***To roll dice simple follow the format '!(NumberOfDice)d(How Many sides the dice has)'\n***.menu*** displays a normal menu for players\n***.CreateCharacter*** allows you to create and save a character"
+829        await ctx.channel.send(halp)
+830
+831    @commands.command(aliases=["Clear"])
+832    async def clear(self, ctx, amount=5):
+833        await ctx.channel.purge(limit=amount)
+834
+835    @commands.command(aliases=["Research","search"])
+836    async def research(self, ctx, *args):
+837        query = (" ".join(args))
+838        searchquery = query + "DnD 5E roll20"
+839        lookup = []
+840        for i in search(searchquery, tld="com", num=10, stop=10, pause=2):
+841            lookup.append(i)
+842        queryfilter = list(filter(lambda x: 'roll20' in x, lookup))
+843        querytosendback = ' '.join(map(str, queryfilter))
+844        await ctx.channel.send(querytosendback)
+845
+846
+847      
+848    @commands.command(aliases=["lookup"])
+849    async def Lookup(self,ctx):
+850  
+851        await ctx.channel.send(f"Please enter which spell, you wish to lookup")
+852        def check(msg):
+853          return msg.author.id == ctx.author.id
+854        msg = await self.client.wait_for('message',check=check)
+855        print(msg)
+856        spell = msg.content.lower()
+857        print(spell)
+858        try:
+859          spellacc = spell.replace(" ","-")
+860        except ValueError:
+861          spellacc = spell
+862        print("tew")
+863        url = f"https://www.dnd5eapi.co/api/spells/{spellacc}"
+864        response =requests.get(url)
+865        print(url)
+866        print("rdffd")#debug print statemnt
+867        if response.status_code == 404: #http error 404 means the webpage of the API isnt found, as such an error message needs to be displayed
+868          print("test1")
+869          await ctx.channel.send(f"spell not found")
+870        if response.status_code == 200:
+871          print("test2")
+872          name = response.json()['name']
+873          description = response.json()['desc']
+874          messagetosend = f"***{name}***\n{description}"
+875          if len(messagetosend) > 1900:
+876            f = open("lookup.txt", "w")
+877            f.write(messagetosend)
+878            f.close()
+879            await ctx.channel.send(file=discord.File(r'lookup.txt'))
+880          else:
+881            await ctx.channel.send(messagetosend)
+882      
+883            
+884
+885
+886        
+887class Error(commands.Cog):
+888    def __init__(self,client):
+889      self.client = client
+890    @commands.Cog.listener()
+891    async def on_command_error(
+892        self, ctx, error
+893    ):  #Error handling commands for general errors pertaining to incorrect command(in discord by user) entry.
+894        if isinstance(error, commands.MissingRequiredArgument):
+895            await ctx.send(
+896                "Please Pass in the full required argument, these can be found with the .help command!"
+897            )
+898        if isinstance(error, discord.ext.commands.errors.CommandNotFound):
+899            await ctx.send(
+900                "Unknown command for a list of commmands please use .helpme! ")
+901
+902
+903def setup(client):
+904    client.add_cog(StartUp(client))
+905    client.add_cog(RollDice(client))
+906    client.add_cog(Account(client))
+907    client.add_cog(Player(client))
+908    client.add_cog(menus(client))
+909    client.add_cog(DM(client))
+910    client.add_cog(General(client))
+911    client.add_cog(Error(client))
+Encrypt.py
+import hashlib
+from Crypto import Random
+from Crypto.Cipher import AES
+from base64 import b64encode, b64decode
+
+class AESCipher(object):
+    def __init__(self, key):
+        self.block_size = AES.block_size
+        self.key = hashlib.sha256(key.encode()).digest() #key and blocksize private methods so that they cannot be accessed outside the class.
+
+    def encrypt(self, plaintext):
+        plaintext = self.__pad(plaintext)
+        iv = Random.new().read(self.block_size)
+        cipher = AES.new(self.key, AES.MODE_CBC, iv) #Creates a new instance of AES from PyCryptoDOme
+        ciphertext = cipher.encrypt(plaintext.encode())#uses the encrypt function from the pycrypto class to encrypt the plaintext. 
+        ciphertextb64 = b64encode(iv + ciphertext).decode("utf-8")#encodes the ciphertext into base64, along with the iv
+        return ciphertextb64 
+
+    def decrypt(self, encryptedtext): #works in reverse of encrypt
+        ciphertext = b64decode(encryptedtext)
+        iv = ciphertext[:self.block_size]
+        cipher = AES.new(self.key, AES.MODE_CBC, iv)
+        plain_text = cipher.decrypt(
+            ciphertext[self.block_size:]).decode("utf-8")
+        return self.__unpad(plain_text)
+  
+    def __pad(self, plaintext):
+        number_of_bytes_to_pad = self.block_size - len(
+            plaintext
+        ) % self.block_size  #ensures the pad is proportional to the length of the plaintext and blocksize.
+        asciistring = chr(number_of_bytes_to_pad)
+        paddingstr = number_of_bytes_to_pad * asciistring
+        paddedplaintext = plaintext + paddingstr
+        return paddedplaintext
+
+    @staticmethod  #Static method means self doesn't have to be passed as an argument. in this case it is important as it is just the plaintext that is needed, if i were to pass self as a parameter it comes back with the error message object AESCipher has no object len.
+    def __unpad(plaintext):
+        last_character = plaintext[len(plaintext) - 1:]
+        return plaintext[:-ord(last_character)]
+
+
+
+#Documentation I used https://docs.python.org/3/library/hashlib.html
+#https://pycryptodome.readthedocs.io/en/latest/src/cipher/aes.html
+ 
+Tables.py
+1 from flask import Flask
+2 from flask_sqlalchemy import SQLAlchemy
+3 
+4 app = Flask(__name__)
+5 app.config[
+6     'SQLALCHEMY_DATABASE_URI'] = 'sqlite:///C:\\sqlite\\DiscordBotInfo.db'
+7 #sets the URI directory where flask will access the database
+8 db = SQLAlchemy(app)
+9 db.init_app(app)
+10
+11
+12class User(db.Model):
+13    id = db.Column(db.Integer, primary_key=True)
+14    username = db.Column(db.String(80), unique=True, nullable=False)
+15    password = db.Column(db.String(80))
+16    Characters = db.relationship("CTU", backref="Creator", lazy='dynamic')
+17    discord = db.relationship("Utid", backref="DiscordNumber", lazy="dynamic")
+18    discordacc = db.Column(db.String(80))
+19
+20    #Adding another column to character, lazy argument defines when the data is loaded means the data will be added in one go.
+21    def __repr__(self):
+22        return f"User('{self.username}','{self.password}')"
+23
+24
+25class Character(db.Model):
+26    id = db.Column(db.Integer, primary_key=True)
+27    Name = db.Column(db.String(80))
+28    DnDClass = db.Column(db.String(20))
+29    AC = db.Column(db.String(20))
+30    MaxHP = db.Column(db.String(20))
+31    Description = db.Column(db.String(2000))
+32    Creator = db.relationship("CTU", backref="Character", lazy='dynamic')
+33    ownerdiscord = db.Column(db.String(80))
+34    primeChar = db.relationship("PrimaryCharacter",
+35                                backref="Char",
+36                                lazy='dynamic')
+37
+38    def __repr__(self):
+39        return f"Character('{self.id}','{self.Name}','{self.DnDClass}','{self.AC}','{self.MaxHP}','{self.Description}','{self.ownerdiscord}')"
+40
+41
+42class CTU(db.Model):
+43    id = db.Column(db.Integer, primary_key=True)
+44    UserID = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+45    CharacterCreator = db.Column(db.Integer,
+46                                 db.ForeignKey('character.id'),
+47                                 nullable=False)
+48
+49
+50class Utid(db.Model):
+51    id = db.Column(db.Integer, primary_key=True)
+52    Discord = db.Column(db.String(80), unique=True)
+53    Username = db.Column(db.String(80), db.ForeignKey("user.username"))
+54    #dm = db.relationship("Dungeonmaster",backref="dm",lazy="dynamic")
+55    #utslink
+56
+57
+58class Dungeonmaster(db.Model):  # UserToDM
+59    id = db.Column(db.Integer, primary_key=True)
+60    discord = db.Column(db.String(80))
+61    monsters = db.relationship("Monster",
+62                               backref="MonstersOwned",
+63                               lazy="dynamic")
+64
+65    def __repr__(self):
+66        return f"Dungeonmaster('{self.id}','{self.id}')"
+67
+68
+69class UTS(db.Model):
+70    id = db.Column(db.Integer, primary_key=True)
+71    UserDiscord = db.Column(db.String(80))
+72    ServerDiscord = db.Column(db.String(80))
+73
+74    def __repr__(self):
+75        return f"UTS('{self.UserDiscord}','{self.ServerDiscord}')"
+76
+77
+78class Monster(db.Model):
+79    id = db.Column(db.Integer, primary_key=True, nullable=False)
+80    Name = db.Column(db.String(80))
+81    MaxHP = db.Column(db.String(20))
+82    HP = db.Column(db.String(20))
+83    AC = db.Column(db.String(20))
+84    description = db.Column(db.String(200))
+85    dm = db.Column(db.ForeignKey("dungeonmaster.id"))
+86
+87    def __repr__(self):
+88        return f"Monster('{self.id}','{self.Name}','{self.MaxHP}','{self.HP}','{self.AC}','{self.description}','{self.dm})'"
+89
+90
+91class PrimaryCharacter(db.Model):
+92    id = db.Column(db.Integer, primary_key=True)
+93    Characters = db.Column(db.Integer, db.ForeignKey('character.id'))
+94    Discord = db.Column(db.String(80), unique=True)
+95
+96    def __repr__(self):
+97        return f"PrimaryCharacter('{self.Characters}','{self.Discord}')"
